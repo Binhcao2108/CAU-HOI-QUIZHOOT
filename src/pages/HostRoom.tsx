@@ -267,6 +267,13 @@ export default function HostRoom() {
       <div className="min-h-screen bg-[#46178f] flex flex-col items-center justify-center p-4 md:p-8 font-sans select-none text-white relative">
         <div className="animate-pulse flex flex-col items-center">
           <span className="text-xl md:text-2xl font-black tracking-[0.2em] mb-4 opacity-50 uppercase">Get Ready</span>
+          {currentQ.pointsMultiplier === 2 && (
+            <div className="animate-bounce mb-8">
+              <span className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-black tracking-widest px-8 py-3 rounded-full text-2xl md:text-4xl shadow-2xl border-4 border-yellow-200 uppercase transform -rotate-2 inline-block">
+                🔥 2X POINTS! 🔥
+              </span>
+            </div>
+          )}
           <h1 className="text-4xl md:text-6xl font-black mb-12 text-center leading-tight max-w-4xl">{currentQ.text}</h1>
           <div className="w-32 h-32 md:w-48 md:h-48 border-8 border-white rounded-full flex items-center justify-center shadow-xl">
             <span className="text-6xl md:text-8xl font-black">{timeLeft}</span>
@@ -387,15 +394,21 @@ export default function HostRoom() {
           <div className="absolute top-0 left-0 w-full h-2 bg-gray-200">
             <div className="h-full bg-[#1368ce] transition-all duration-1000" style={{ width: `${(timeLeft / (room.questions[room.currentQuestionIndex]?.timeLimit || 1)) * 100}%` }}></div>
           </div>
-          <span className="text-[#333] text-xs md:text-sm font-black uppercase tracking-[0.2em] mb-4 opacity-50 flex items-center gap-2">
-            Question {room.currentQuestionIndex + 1} of {room.questions.length}
+          <div className="flex flex-col items-center mb-4">
+            <span className="text-[#333] text-xs md:text-sm font-black uppercase tracking-[0.2em] mb-2 opacity-50 flex items-center gap-2">
+              Question {room.currentQuestionIndex + 1} of {room.questions.length}
+              {currentQ.type === 'multiple' && (
+                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">Multi-Select</span>
+              )}
+            </span>
             {currentQ.pointsMultiplier === 2 && (
-              <span className="bg-purple-100 text-[#46178f] px-2 py-0.5 rounded-md">2x Points</span>
+              <div className="animate-bounce mt-2">
+                <span className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-black tracking-widest px-6 py-2 rounded-full text-lg md:text-xl shadow-lg border-2 border-yellow-200 uppercase transform -rotate-2 inline-block">
+                  🔥 2X POINTS! 🔥
+                </span>
+              </div>
             )}
-            {currentQ.type === 'multiple' && (
-              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">Multi-Select</span>
-            )}
-          </span>
+          </div>
           <h1 className="text-[#333] text-2xl md:text-4xl font-black leading-tight max-w-3xl px-4">{currentQ.text}</h1>
           
           {!isShowAnswer ? (
@@ -411,8 +424,16 @@ export default function HostRoom() {
       </main>
 
       <footer className="grid grid-cols-2 gap-2 md:gap-4 h-auto md:h-[240px] flex-shrink-0">
-        {[0, 1, 2, 3].map(i => (
-          currentQ.options[i] ? (
+        {[0, 1, 2, 3].map(i => {
+          const voteCount = players.filter(p => {
+             const ans = p.answerHistory?.[room.currentQuestionIndex];
+             if (!ans) return false;
+             if (ans.optionIndex === i) return true;
+             if (ans.optionIndexes?.includes(i)) return true;
+             return false;
+          }).length;
+          
+          return currentQ.options[i] ? (
             <div key={i} className={`${colors[i]} ${isShowAnswer && !isCorrectHelper(i) ? 'opacity-30' : 'opacity-100'} rounded-2xl flex flex-col md:flex-row items-center justify-center md:justify-start p-4 md:p-6 gap-2 md:gap-4 shadow-lg border-b-4 border-black/20 transition-opacity duration-300 relative`}>
               {shapes[i]}
               <span className="text-sm md:text-2xl font-bold break-words text-center md:text-left">{currentQ.options[i]}</span>
@@ -421,9 +442,15 @@ export default function HostRoom() {
                   <div className="w-6 h-6 md:w-8 md:h-8 bg-white text-green-500 rounded-full flex items-center justify-center text-xl">✓</div>
                 </div>
               )}
+              {isShowAnswer && (
+                <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 bg-black/60 backdrop-blur-sm text-white rounded-full px-4 py-1.5 shadow-lg flex items-center gap-2">
+                  <span className="font-black text-xl md:text-2xl">{voteCount}</span>
+                  <span className="text-xs md:text-sm font-bold uppercase tracking-wider opacity-80">Votes</span>
+                </div>
+              )}
             </div>
           ) : null
-        ))}
+        })}
       </footer>
     </div>
   );

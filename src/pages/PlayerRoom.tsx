@@ -181,6 +181,13 @@ export default function PlayerRoom() {
       <div className="min-h-screen bg-[#46178f] flex flex-col items-center justify-center p-4 md:p-8 font-sans select-none text-white relative">
         <div className="animate-pulse flex flex-col items-center w-full max-w-4xl">
           <span className="text-xl md:text-2xl font-black tracking-[0.2em] mb-4 opacity-50 uppercase">Get Ready</span>
+          {currentQ.pointsMultiplier === 2 && (
+            <div className="animate-bounce mb-8 mt-2">
+              <span className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-black tracking-widest px-8 py-3 rounded-full text-2xl md:text-4xl shadow-xl border-4 border-yellow-200 uppercase transform -rotate-2 inline-block">
+                🔥 2X POINTS! 🔥
+              </span>
+            </div>
+          )}
           <h1 className="text-3xl md:text-5xl font-black mb-8 text-center leading-tight">{currentQ.text}</h1>
           <div className="w-24 h-24 md:w-32 md:h-32 border-[6px] border-white rounded-full flex items-center justify-center shadow-xl bg-white/10 backdrop-blur-sm">
             <span className="text-4xl md:text-6xl font-black drop-shadow-md">{timeLeft}</span>
@@ -225,8 +232,10 @@ export default function PlayerRoom() {
     return (
       <div className="min-h-screen bg-[#46178f] flex flex-col items-center justify-center p-4 text-center font-sans select-none text-white relative">
         {room.gameState === 'answer' && room.currentQuestionIndex + 1 < room.questions.length && room.questions[room.currentQuestionIndex + 1].pointsMultiplier === 2 ? (
-          <div className="mb-8 animate-bounce bg-yellow-400 text-yellow-900 px-8 py-4 rounded-full font-black text-2xl shadow-xl transform rotate-2 border-b-8 border-yellow-600">
-            Next question is 2x POINTS!
+          <div className="mb-12 animate-bounce">
+            <span className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white px-8 py-4 rounded-full font-black text-2xl md:text-4xl shadow-[0_8px_0_#c2410c] transform -rotate-2 inline-block uppercase tracking-widest border-4 border-yellow-200">
+               🔥 Next is 2x POINTS! 🔥
+            </span>
           </div>
         ) : null}
         <h2 className="text-3xl md:text-4xl font-black mb-2 italic tracking-tighter opacity-80">
@@ -259,7 +268,11 @@ export default function PlayerRoom() {
       {currentQuestion && (
         <div className="bg-white px-6 py-8 md:py-12 shadow-sm border-b border-gray-200 text-center flex flex-col items-center justify-center min-h-[120px]">
           {currentQuestion.pointsMultiplier === 2 && (
-             <span className="bg-purple-100 text-[#46178f] font-black tracking-widest px-4 py-1 rounded-full mb-4 animate-pulse">2X POINTS</span>
+             <div className="animate-bounce mb-6 mt-2">
+               <span className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-black tracking-widest px-8 py-3 rounded-full text-xl md:text-3xl shadow-xl shadow-orange-500/30 border-4 border-yellow-200 uppercase transform -rotate-2 inline-block">
+                 🔥 2X POINTS! 🔥
+               </span>
+             </div>
           )}
           <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800 leading-tight max-w-4xl mx-auto">
             {currentQuestion.text}
