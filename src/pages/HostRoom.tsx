@@ -48,11 +48,18 @@ export default function HostRoom() {
       timerRef.current = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
     } else if (room?.status === 'playing' && room?.gameState === 'question' && timeLeft === 0) {
       handleTimeUp();
+    } else if (room?.status === 'playing' && room?.gameState === 'preview' && timeLeft > 0) {
+      timerRef.current = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
+    } else if (room?.status === 'playing' && room?.gameState === 'preview' && timeLeft === 0) {
+      if (room.questions && room.questions[room.currentQuestionIndex]) {
+        setTimeLeft(room.questions[room.currentQuestionIndex].timeLimit);
+      }
+      updateDoc(doc(db, 'rooms', room.id), { gameState: 'question' }).catch(e => handleFirestoreError(e, OperationType.UPDATE, `rooms/${room.id}`));
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [room?.status, room?.gameState, timeLeft]);
+  }, [room?.status, room?.gameState, timeLeft, room?.currentQuestionIndex, room?.id, room?.questions]);
 
   // Check if all players answered
   useEffect(() => {
@@ -68,10 +75,10 @@ export default function HostRoom() {
   const startGame = async () => {
     if (!room) return;
     try {
-      setTimeLeft(room.questions[0].timeLimit);
+      setTimeLeft(10);
       await updateDoc(doc(db, 'rooms', room.id), {
         status: 'playing',
-        gameState: 'question',
+        gameState: 'preview',
         currentQuestionIndex: 0
       });
     } catch (e) {
@@ -143,10 +150,10 @@ export default function HostRoom() {
     } else if (room.gameState === 'leaderboard') {
       if (room.currentQuestionIndex < room.questions.length - 1) {
         const nextIndex = room.currentQuestionIndex + 1;
-        setTimeLeft(room.questions[nextIndex].timeLimit);
+        setTimeLeft(10);
         updateDoc(doc(db, 'rooms', room.id), { 
            currentQuestionIndex: nextIndex,
-           gameState: 'question'
+           gameState: 'preview'
         }).catch(e => handleFirestoreError(e, OperationType.UPDATE, `rooms/${room.id}`));
       } else {
         updateDoc(doc(db, 'rooms', room.id), { status: 'finished' })
@@ -255,6 +262,20 @@ export default function HostRoom() {
     );
   }
 
+  if (room.gameState === 'preview') {
+    return (
+      <div className="min-h-screen bg-[#46178f] flex flex-col items-center justify-center p-4 md:p-8 font-sans select-none text-white relative">
+        <div className="animate-pulse flex flex-col items-center">
+          <span className="text-xl md:text-2xl font-black tracking-[0.2em] mb-4 opacity-50 uppercase">Get Ready</span>
+          <h1 className="text-4xl md:text-6xl font-black mb-12 text-center leading-tight max-w-4xl">{currentQ.text}</h1>
+          <div className="w-32 h-32 md:w-48 md:h-48 border-8 border-white rounded-full flex items-center justify-center shadow-xl">
+            <span className="text-6xl md:text-8xl font-black">{timeLeft}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (room.status === 'finished') {
     const sorted = [...players].sort((a,b) => b.score - a.score);
     return (
@@ -329,10 +350,10 @@ export default function HostRoom() {
   
   const colors = ['bg-[#e21b3c]', 'bg-[#1368ce]', 'bg-[#d89e00]', 'bg-[#26890c]'];
   const shapes = [
-    <div className="w-10 h-10 md:w-16 md:h-16 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0"><div className="w-4 h-4 md:w-8 md:h-8 border-4 border-white rotate-45"></div></div>,
-    <div className="w-10 h-10 md:w-16 md:h-16 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0"><div className="w-4 h-4 md:w-8 md:h-8 border-4 border-white rounded-full"></div></div>,
-    <div className="w-10 h-10 md:w-16 md:h-16 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0"><div className="w-4 h-4 md:w-8 md:h-8 border-4 border-white"></div></div>,
-    <div className="w-10 h-10 md:w-16 md:h-16 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0"><div className="w-0 h-0 border-l-[8px] md:border-l-[16px] border-l-transparent border-r-[8px] md:border-r-[16px] border-r-transparent border-b-[14px] md:border-b-[28px] border-b-white"></div></div>
+    <svg className="w-10 h-10 md:w-16 md:h-16 text-white drop-shadow-lg transform group-hover:scale-110 transition-transform duration-300" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l10 10-10 10L2 12 12 2z"/></svg>,
+    <svg className="w-10 h-10 md:w-16 md:h-16 text-white drop-shadow-lg transform group-hover:scale-110 transition-transform duration-300" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>,
+    <svg className="w-10 h-10 md:w-16 md:h-16 text-white drop-shadow-lg transform group-hover:scale-110 transition-transform duration-300" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>,
+    <svg className="w-10 h-10 md:w-16 md:h-16 text-white drop-shadow-lg transform group-hover:scale-110 transition-transform duration-300" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 22h20L12 2z"/></svg>
   ];
 
   return (

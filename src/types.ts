@@ -12,6 +12,7 @@ export interface Quiz {
   title: string;
   questions: Question[];
   createdAt: number;
+  hideQuestionsOnPlayerDevice?: boolean;
 }
 
 export interface Room {
@@ -19,10 +20,11 @@ export interface Room {
   hostId: string;
   pin: string;
   status: 'waiting' | 'playing' | 'finished';
-  gameState: 'question' | 'answer' | 'leaderboard';
+  gameState: 'preview' | 'question' | 'answer' | 'leaderboard';
   currentQuestionIndex: number;
   questions: Question[];
   createdAt: number;
+  hideQuestionsOnPlayerDevice?: boolean;
 }
 
 export interface Player {

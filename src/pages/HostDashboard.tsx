@@ -108,6 +108,7 @@ export default function HostDashboard() {
           title,
           questions,
           createdAt: serverTimestamp(),
+          hideQuestionsOnPlayerDevice: file.name.endsWith('.xlsx'),
         };
 
         await setDoc(quizRef, quizDataToSave);
@@ -187,6 +188,7 @@ export default function HostDashboard() {
         currentQuestionIndex: 0,
         questions: quiz.questions,
         createdAt: serverTimestamp(),
+        hideQuestionsOnPlayerDevice: quiz.hideQuestionsOnPlayerDevice || false,
       };
 
       await setDoc(doc(db, 'rooms', roomId), roomData).catch(e => {

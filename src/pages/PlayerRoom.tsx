@@ -48,13 +48,46 @@ export default function PlayerRoom() {
   }, [roomId, navigate]);
 
   // Track question start to calculate response time
+  const [timeLeft, setTimeLeft] = useState(0);
+
   useEffect(() => {
-    if (room?.status === 'playing' && room.currentQuestionIndex >= 0) {
-      // Whenever a new question starts, reset start time and selections
-      setQuestionStartTime(Date.now());
-      setSelectedOptions([]);
+    if (room?.status === 'playing') {
+      if (room.gameState === 'preview') {
+        const start = Date.now();
+        setQuestionStartTime(start);
+        setSelectedOptions([]);
+        setTimeLeft(10);
+        
+        const timer = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - start) / 1000);
+          setTimeLeft(Math.max(0, 10 - elapsed));
+        }, 200);
+        return () => clearInterval(timer);
+      } else if (room.gameState === 'question') {
+        const currentQ = room.questions[room.currentQuestionIndex];
+        const timeLimit = currentQ?.timeLimit || 20;
+        
+        // Use the questionStartTime we already have, or reset if missing
+        let start = questionStartTime;
+        if (!start || start > Date.now() || Date.now() - start > 15000) {
+           start = Date.now();
+           setQuestionStartTime(start);
+        }
+        
+        // Wait, if we keep the same questionStartTime from 'preview', the responseTime calculation will be wrong (it will include preview time).
+        // Let's reset questionStartTime exactly when entering 'question' state.
+        const actualStart = Date.now();
+        setQuestionStartTime(actualStart);
+        setTimeLeft(timeLimit);
+        
+        const timer = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - actualStart) / 1000);
+          setTimeLeft(Math.max(0, timeLimit - elapsed));
+        }, 200);
+        return () => clearInterval(timer);
+      }
     }
-  }, [room?.currentQuestionIndex, room?.status]);
+  }, [room?.currentQuestionIndex, room?.status, room?.gameState]);
 
   const submitAnswer = async (optionIndex?: number) => {
     if (!room || !player) return;
@@ -142,6 +175,21 @@ export default function PlayerRoom() {
   }
 
   // playing
+  if (room.gameState === 'preview') {
+    const currentQ = room.questions[room.currentQuestionIndex];
+    return (
+      <div className="min-h-screen bg-[#46178f] flex flex-col items-center justify-center p-4 md:p-8 font-sans select-none text-white relative">
+        <div className="animate-pulse flex flex-col items-center w-full max-w-4xl">
+          <span className="text-xl md:text-2xl font-black tracking-[0.2em] mb-4 opacity-50 uppercase">Get Ready</span>
+          <h1 className="text-3xl md:text-5xl font-black mb-8 text-center leading-tight">{currentQ.text}</h1>
+          <div className="w-24 h-24 md:w-32 md:h-32 border-[6px] border-white rounded-full flex items-center justify-center shadow-xl bg-white/10 backdrop-blur-sm">
+            <span className="text-4xl md:text-6xl font-black drop-shadow-md">{timeLeft}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const isQuestionActive = room.gameState === 'question';
   const hasAnsweredCurrent = player.currentAnswer?.questionIndex === room.currentQuestionIndex;
 
@@ -196,10 +244,15 @@ export default function PlayerRoom() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans select-none relative">
       <div className="bg-white px-6 py-4 shadow-sm flex justify-between items-center z-10 sticky top-0 border-b border-gray-200">
-        <p className="font-bold text-gray-800 text-lg md:text-xl tracking-tight">{player.nickname}</p>
-        <div className="flex items-center bg-gray-100 rounded-full pl-3 pr-4 py-1.5">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-2">Score</span>
-          <span className="text-[#46178f] text-lg font-black">{player.score}</span>
+        <p className="font-bold text-gray-800 text-lg md:text-xl tracking-tight truncate max-w-[40%]">{player.nickname}</p>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center bg-white rounded-full w-12 h-12 border-4 border-[#46178f] shadow-sm">
+            <span className="text-[#46178f] text-xl font-black">{timeLeft}</span>
+          </div>
+          <div className="flex items-center bg-gray-100 rounded-full pl-3 pr-4 py-2">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-2 hidden sm:inline">Score</span>
+            <span className="text-[#46178f] text-lg font-black">{player.score}</span>
+          </div>
         </div>
       </div>
       
@@ -239,11 +292,27 @@ export default function PlayerRoom() {
                     <Save size={20} className="stroke-[3]" />
                   </div>
                 )}
-                <div className="mb-4 drop-shadow-md transform group-hover:scale-110 transition-transform">
-                  {i === 0 && <div className="w-8 h-8 md:w-10 md:h-10 border-[3px] md:border-4 border-white rotate-45"></div>}
-                  {i === 1 && <div className="w-8 h-8 md:w-10 md:h-10 border-[3px] md:border-4 border-white rounded-full"></div>}
-                  {i === 2 && <div className="w-8 h-8 md:w-10 md:h-10 border-[3px] md:border-4 border-white"></div>}
-                  {i === 3 && <div className="w-0 h-0 border-l-[14px] md:border-l-[18px] border-l-transparent border-r-[14px] md:border-r-[18px] border-r-transparent border-b-[24px] md:border-b-[32px] border-b-white"></div>}
+                <div className="mb-4 drop-shadow-md transform group-hover:scale-125 group-hover:rotate-12 transition-all duration-300 ease-out">
+                  {i === 0 && (
+                    <svg className="w-10 h-10 md:w-16 md:h-16 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2l10 10-10 10L2 12 12 2z"/>
+                    </svg>
+                  )}
+                  {i === 1 && (
+                    <svg className="w-10 h-10 md:w-16 md:h-16 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                  )}
+                  {i === 2 && (
+                    <svg className="w-10 h-10 md:w-16 md:h-16 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="3" y="3" width="18" height="18" rx="3"/>
+                    </svg>
+                  )}
+                  {i === 3 && (
+                    <svg className="w-10 h-10 md:w-16 md:h-16 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2L2 22h20L12 2z"/>
+                    </svg>
+                  )}
                 </div>
                 <span className="text-white font-bold text-lg md:text-xl drop-shadow-md leading-tight">{currentQuestion.options[i]}</span>
               </button>
