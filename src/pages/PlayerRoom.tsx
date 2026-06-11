@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc, collection } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db } from '../firebase';
 import { Room, Player } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 import { ArrowLeft, Save, Trophy } from 'lucide-react';
@@ -16,7 +16,7 @@ export default function PlayerRoom() {
 
   useEffect(() => {
     if (!roomId) return;
-    const userId = auth.currentUser?.uid || sessionStorage.getItem('quizhoot_playerId');
+    const userId = sessionStorage.getItem('quizhoot_playerId');
     if (!userId) {
       navigate('/');
       return;

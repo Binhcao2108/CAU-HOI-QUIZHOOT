@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, collection, onSnapshot, updateDoc, getDoc, writeBatch } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db } from '../firebase';
 import { Room, Player } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 import { Users, Trophy, ChevronRight, Play, ArrowLeft, XCircle, Download } from 'lucide-react';
@@ -16,7 +16,8 @@ export default function HostRoom() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!roomId || !auth.currentUser) return;
+    // Only check roomId
+    if (!roomId) return;
     
     const unsubscribeRoom = onSnapshot(doc(db, 'rooms', roomId), (docSnap) => {
       if (docSnap.exists()) {

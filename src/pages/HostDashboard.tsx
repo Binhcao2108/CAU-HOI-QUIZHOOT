@@ -1,29 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInAnonymously } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 import { Plus, Play, LogOut, ArrowLeft } from 'lucide-react';
 import { Quiz } from '../types';
 
 export default function HostDashboard() {
-  const [user, setUser] = useState(auth.currentUser);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  const getOrCreateHostId = () => {
+    let hostId = localStorage.getItem('quizhoot_hostId');
+    if (!hostId) {
+      hostId = 'host_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('quizhoot_hostId', hostId);
+    }
+    return hostId;
+  };
+
+  const hostId = getOrCreateHostId();
+
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      if (u) {
-        setUser(u);
-        fetchQuizzes(u.uid);
-      } else {
-        signInAnonymously(auth).catch(console.error);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+    fetchQuizzes(hostId);
+  }, [hostId]);
 
   const fetchQuizzes = async (userId: string) => {
     try {
@@ -43,7 +44,6 @@ export default function HostDashboard() {
   };
 
   const playQuiz = async (quiz: Quiz) => {
-    if (!user) return;
     try {
       // Fetch private answers
       const privateSnap = await getDoc(doc(db, 'quizzes', quiz.id, 'private', 'hostOnly'));
@@ -54,7 +54,7 @@ export default function HostDashboard() {
       const roomId = pin;
 
       const roomData = {
-        hostId: user.uid,
+        hostId: hostId,
         pin,
         status: 'waiting',
         gameState: 'question',

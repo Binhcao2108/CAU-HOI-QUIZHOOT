@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { signInAnonymously } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 import { ArrowLeft, Save } from 'lucide-react';
 
@@ -28,18 +27,8 @@ export default function PlayerJoin() {
     if (!pin || !nickname.trim() || error) return;
     setLoading(true);
     try {
-      // 1. Anon Sign In or Use current user
-      let playerId = auth.currentUser?.uid;
-      if (!playerId) {
-        try {
-          const cred = await signInAnonymously(auth);
-          playerId = cred.user.uid;
-        } catch (authErr) {
-          console.warn("Anonymous auth failed, using a generated random ID instead.", authErr);
-          playerId = 'anon_' + Math.random().toString(36).substring(2, 15);
-        }
-      }
-      
+      // 1. Generate player ID
+      const playerId = 'anon_' + Math.random().toString(36).substring(2, 15);
       sessionStorage.setItem('quizhoot_playerId', playerId);
 
       // 2. Create player document

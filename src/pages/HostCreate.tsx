@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db } from '../firebase';
 import { Question, Quiz } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 import { PlusCircle, Trash2, Save, ArrowLeft } from 'lucide-react';
@@ -14,6 +14,15 @@ export default function HostCreate() {
   const [correctAnswers, setCorrectAnswers] = useState<number[]>([0]);
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
+
+  const getOrCreateHostId = () => {
+    let hostId = localStorage.getItem('quizhoot_hostId');
+    if (!hostId) {
+      hostId = 'host_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('quizhoot_hostId', hostId);
+    }
+    return hostId;
+  };
 
   const addQuestion = () => {
     setQuestions([...questions, { text: '', options: ['', '', '', ''], timeLimit: 20 }]);
@@ -41,14 +50,14 @@ export default function HostCreate() {
   };
 
   const saveQuiz = async () => {
-    if (!auth.currentUser) return;
+    const hostId = getOrCreateHostId();
     try {
       setIsSaving(true);
       const quizRef = doc(collection(db, 'quizzes'));
       const quizId = quizRef.id;
 
       const quizData = {
-        hostId: auth.currentUser.uid,
+        hostId,
         title,
         questions,
         createdAt: serverTimestamp(),
