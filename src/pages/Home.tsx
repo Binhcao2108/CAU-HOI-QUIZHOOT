@@ -4,12 +4,25 @@ import { MonitorPlay, Joystick, ArrowLeft, Save } from 'lucide-react';
 
 export default function Home() {
   const [pin, setPin] = useState('');
+  const [showHostPassword, setShowHostPassword] = useState(false);
+  const [hostPassword, setHostPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
   const navigate = useNavigate();
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (pin.trim().length === 6) {
       navigate(`/join/${pin.trim()}`);
+    }
+  };
+
+  const handleHostLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (hostPassword === 'KTCNPRO') {
+      navigate('/host');
+    } else {
+      setPasswordError(true);
+      setTimeout(() => setPasswordError(false), 2000);
     }
   };
 
@@ -46,13 +59,42 @@ export default function Home() {
 
         <div className="mt-8 pt-6 border-t-[3px] border-dashed border-gray-100 text-center">
           <p className="text-gray-400 font-bold mb-4 text-sm">Want to create your own quiz?</p>
-          <button
-            onClick={() => navigate('/host')}
-            className="text-white bg-[#1368ce] hover:bg-blue-700 font-bold py-3 px-6 rounded-xl shadow border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 w-full"
-          >
-            <MonitorPlay size={20} />
-            Host a Game
-          </button>
+          {!showHostPassword ? (
+            <button
+              onClick={() => setShowHostPassword(true)}
+              className="text-white bg-[#1368ce] hover:bg-blue-700 font-bold py-3 px-6 rounded-xl shadow border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 w-full"
+            >
+              <MonitorPlay size={20} />
+              Host a Game
+            </button>
+          ) : (
+            <form onSubmit={handleHostLogin} className="space-y-3">
+              <input
+                type="password"
+                value={hostPassword}
+                onChange={(e) => setHostPassword(e.target.value)}
+                placeholder="Host Password"
+                className={`w-full text-center font-bold p-3 bg-gray-50 border-2 rounded-xl outline-none focus:border-[#1368ce] transition-all ${passwordError ? 'border-red-500 bg-red-50 text-red-500' : 'border-gray-200'}`}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowHostPassword(false)}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold py-3 px-4 rounded-xl flex-shrink-0 transition-colors"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <button
+                  type="submit"
+                  disabled={!hostPassword}
+                  className="bg-[#1368ce] hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl flex-grow shadow border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all"
+                >
+                  Verify
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>
