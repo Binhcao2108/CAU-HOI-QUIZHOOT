@@ -19,6 +19,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/host" element={<HostDashboard />} />
         <Route path="/host/create" element={<HostCreate />} />
+        <Route path="/host/edit/:quizId" element={<HostCreate />} />
         <Route path="/host/room/:roomId" element={<HostRoom />} />
         <Route path="/join/:pin" element={<PlayerJoin />} />
         <Route path="/play/:roomId" element={<PlayerRoom />} />

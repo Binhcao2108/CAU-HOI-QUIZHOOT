@@ -1,19 +1,47 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { doc, setDoc, getDoc, serverTimestamp, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Question, Quiz } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 import { PlusCircle, Trash2, Save, ArrowLeft, Download } from 'lucide-react';
 
 export default function HostCreate() {
+  const { quizId } = useParams<{ quizId: string }>();
   const [title, setTitle] = useState('My Awesome Quiz');
   const [questions, setQuestions] = useState<Question[]>([
     { text: '', options: ['', '', '', ''], timeLimit: 20 }
   ]);
   const [correctAnswers, setCorrectAnswers] = useState<number[]>([0]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(!!quizId);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!quizId) return;
+    const fetchQuiz = async () => {
+      try {
+        const quizSnap = await getDoc(doc(db, 'quizzes', quizId));
+        if (quizSnap.exists()) {
+          const quizData = quizSnap.data();
+          setTitle(quizData.title);
+          setQuestions(quizData.questions);
+          
+          const privateSnap = await getDoc(doc(db, 'quizzes', quizId, 'private', 'hostOnly'));
+          if (privateSnap.exists()) {
+            setCorrectAnswers(privateSnap.data().correctAnswers || Array(quizData.questions.length).fill(0));
+          } else {
+             setCorrectAnswers(Array(quizData.questions.length).fill(0));
+          }
+        }
+      } catch (err) {
+         console.error("Failed to load quiz", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchQuiz();
+  }, [quizId]);
 
   const getOrCreateHostId = () => {
     let hostId = localStorage.getItem('quizhoot_hostId');
@@ -70,24 +98,27 @@ export default function HostCreate() {
     const hostId = getOrCreateHostId();
     try {
       setIsSaving(true);
-      const quizRef = doc(collection(db, 'quizzes'));
-      const quizId = quizRef.id;
+      const quizRef = quizId ? doc(db, 'quizzes', quizId) : doc(collection(db, 'quizzes'));
+      const finalQuizId = quizRef.id;
 
-      const quizData = {
+      const quizData: any = {
         hostId,
         title,
         questions,
-        createdAt: serverTimestamp(),
       };
+      
+      if (!quizId) {
+        quizData.createdAt = serverTimestamp();
+      }
 
-      await setDoc(quizRef, quizData).catch(e => {
-        handleFirestoreError(e, OperationType.CREATE, `quizzes/${quizId}`);
+      await setDoc(quizRef, quizData, { merge: true }).catch(e => {
+        handleFirestoreError(e, OperationType.UPDATE, `quizzes/${finalQuizId}`);
       });
 
       // Write private correct answers
       const privateData = { correctAnswers };
-      await setDoc(doc(db, 'quizzes', quizId, 'private', 'hostOnly'), privateData).catch(e => {
-        handleFirestoreError(e, OperationType.CREATE, `quizzes/${quizId}/private/hostOnly`);
+      await setDoc(doc(db, 'quizzes', finalQuizId, 'private', 'hostOnly'), privateData, { merge: true }).catch(e => {
+        handleFirestoreError(e, OperationType.UPDATE, `quizzes/${finalQuizId}/private/hostOnly`);
       });
 
       navigate('/host');
@@ -98,6 +129,10 @@ export default function HostCreate() {
       setIsSaving(false);
     }
   };
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold">Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans pb-12">

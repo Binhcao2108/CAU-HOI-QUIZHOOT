@@ -98,9 +98,22 @@ export default function PlayerRoom() {
           </div>
         )}
 
-        <div className="bg-white text-[#46178f] py-6 px-10 rounded-3xl shadow-2xl mt-4 border-b-8 border-gray-300">
+        <div className="bg-white text-[#46178f] py-6 px-10 rounded-3xl shadow-2xl mt-4 border-b-8 border-gray-300 w-full max-w-sm">
           <p className="text-lg font-bold text-gray-500 mb-1 uppercase tracking-widest">Your Final Score</p>
           <p className="text-6xl font-black">{player.score}</p>
+        </div>
+
+        <div className="bg-white text-[#333] rounded-2xl p-4 mt-8 shadow-xl w-full max-w-md max-h-[40vh] overflow-y-auto">
+          <h3 className="text-xl font-bold mb-4 text-center">Final Leaderboard</h3>
+          {sortedPlayers.slice(0, 10).map((p, index) => (
+             <div key={p.id} className="flex justify-between items-center bg-gray-100 rounded-lg p-3 mb-2 font-bold text-lg">
+                <span className="flex items-center gap-2">
+                  <span className="text-gray-500 w-6">{index + 1}.</span>
+                  {p.nickname} {p.id === player.id && "(You)"}
+                </span>
+                <span>{p.score}</span>
+             </div>
+          ))}
         </div>
       </div>
     );
@@ -111,10 +124,38 @@ export default function PlayerRoom() {
   const hasAnsweredCurrent = player.currentAnswer?.questionIndex === room.currentQuestionIndex;
 
   if (hasAnsweredCurrent || !isQuestionActive) {
+    if (room.gameState === 'leaderboard') {
+      const sortedPlayers = [...players].sort((a,b) => b.score - a.score);
+      const rank = sortedPlayers.findIndex(p => p.id === player.id) + 1;
+      
+      return (
+        <div className="min-h-screen bg-[#46178f] flex flex-col items-center p-4 md:p-8 text-center font-sans select-none text-white overflow-y-auto">
+          <h2 className="text-3xl md:text-5xl font-black mb-4 italic tracking-tighter mt-4">Current Standings</h2>
+          {rank > 0 && (
+            <div className="flex items-center gap-2 bg-yellow-400 text-yellow-900 px-4 py-2 rounded-full font-bold text-lg mb-6 shadow-md border-b-4 border-yellow-600">
+              <Trophy size={20} />
+              <span>You are Rank {rank}</span>
+            </div>
+          )}
+          <div className="bg-white text-[#333] rounded-2xl p-4 shadow-xl w-full max-w-md">
+            {sortedPlayers.slice(0, 5).map((p, index) => (
+               <div key={p.id} className="flex justify-between items-center bg-gray-100 rounded-lg p-3 mb-2 font-bold text-lg">
+                  <span className="flex items-center gap-2">
+                    <span className="text-gray-500 w-6">{index + 1}.</span>
+                    {p.nickname} {p.id === player.id && "(You)"}
+                  </span>
+                  <span>{p.score}</span>
+               </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#46178f] flex flex-col items-center justify-center p-4 text-center font-sans select-none text-white relative">
         <h2 className="text-3xl md:text-4xl font-black mb-2 italic tracking-tighter opacity-80">
-           {!isQuestionActive ? "Look at the screen!" : "Waiting for others..."}
+           {!isQuestionActive && room.gameState !== 'leaderboard' ? "Look at the screen!" : "Waiting for others..."}
         </h2>
       </div>
     );
