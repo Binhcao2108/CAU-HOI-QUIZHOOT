@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup } from 'firebase/auth';
+import { signInAnonymously } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, googleProvider, db } from '../firebase';
+import { auth, db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
-import { LogIn, Plus, Play, LogOut, ArrowLeft } from 'lucide-react';
+import { Plus, Play, LogOut, ArrowLeft } from 'lucide-react';
 import { Quiz } from '../types';
 
 export default function HostDashboard() {
@@ -15,11 +15,11 @@ export default function HostDashboard() {
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((u) => {
-      setUser(u);
       if (u) {
+        setUser(u);
         fetchQuizzes(u.uid);
       } else {
-        setLoading(false);
+        signInAnonymously(auth).catch(console.error);
       }
     });
     return () => unsubscribe();
@@ -38,16 +38,8 @@ export default function HostDashboard() {
     }
   };
 
-  const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const handleLogout = () => {
-    auth.signOut();
+    navigate('/');
   };
 
   const playQuiz = async (quiz: Quiz) => {
@@ -87,30 +79,6 @@ export default function HostDashboard() {
     }
   };
 
-  if (!user && !loading) {
-    return (
-      <div className="min-h-screen bg-[#46178f] flex items-center justify-center p-4 font-sans">
-        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center relative">
-          <button
-            onClick={() => navigate('/')}
-            className="absolute top-6 left-6 text-gray-400 hover:text-gray-700 transition-colors"
-            title="Back to Home"
-          >
-            <ArrowLeft size={24} />
-          </button>
-          <h2 className="text-3xl font-black mb-6 text-[#333] italic tracking-tighter mt-4">Host Login</h2>
-          <button
-            onClick={handleLogin}
-            className="w-full bg-[#1368ce] hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3 text-lg"
-          >
-            <LogIn size={24} />
-            Sign in with Google
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (loading) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold">Loading...</div>;
   }
@@ -129,7 +97,7 @@ export default function HostDashboard() {
             </button>
             <div>
               <h1 className="text-3xl font-black text-[#333] tracking-tighter italic">Library</h1>
-              <p className="text-gray-500 font-medium">Logged in as {user?.email}</p>
+              <p className="text-gray-500 font-medium">Host Dashboard</p>
             </div>
           </div>
           <div className="flex gap-4">
@@ -139,12 +107,6 @@ export default function HostDashboard() {
             >
               <Plus size={20} />
               Create
-            </button>
-            <button
-              onClick={handleLogout}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-xl shadow-sm border-b-4 border-gray-300 active:border-b-0 active:translate-y-1 transition-all flex items-center"
-            >
-              <LogOut size={20} />
             </button>
           </div>
         </header>
