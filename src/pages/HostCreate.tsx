@@ -9,6 +9,7 @@ import { PlusCircle, Trash2, Save, ArrowLeft, Download } from 'lucide-react';
 export default function HostCreate() {
   const { quizId } = useParams<{ quizId: string }>();
   const [title, setTitle] = useState('My Awesome Quiz');
+  const [previewTimeLimit, setPreviewTimeLimit] = useState(5);
   const [questions, setQuestions] = useState<Question[]>([
     { text: '', options: ['', '', '', ''], timeLimit: 20, type: 'single', pointsMultiplier: 1 }
   ]);
@@ -25,6 +26,7 @@ export default function HostCreate() {
         if (quizSnap.exists()) {
           const quizData = quizSnap.data();
           setTitle(quizData.title);
+          setPreviewTimeLimit(quizData.previewTimeLimit || 5);
           setQuestions(quizData.questions.map((q: any) => ({
             ...q,
             type: q.type || 'single',
@@ -33,7 +35,12 @@ export default function HostCreate() {
           
           const privateSnap = await getDoc(doc(db, 'quizzes', quizId, 'private', 'hostOnly'));
           if (privateSnap.exists()) {
-            setCorrectAnswers(privateSnap.data().correctAnswers || Array(quizData.questions.length).fill(0));
+            const data = privateSnap.data();
+            if (data.correctAnswersJson) {
+              setCorrectAnswers(JSON.parse(data.correctAnswersJson));
+            } else {
+              setCorrectAnswers(data.correctAnswers || Array(quizData.questions.length).fill(0));
+            }
           } else {
              setCorrectAnswers(Array(quizData.questions.length).fill(0));
           }
@@ -120,6 +127,7 @@ export default function HostCreate() {
         hostId,
         title,
         questions,
+        previewTimeLimit,
       };
       
       if (!quizId) {
@@ -131,7 +139,7 @@ export default function HostCreate() {
       });
 
       // Write private correct answers
-      const privateData = { correctAnswers };
+      const privateData = { correctAnswersJson: JSON.stringify(correctAnswers) };
       await setDoc(doc(db, 'quizzes', finalQuizId, 'private', 'hostOnly'), privateData, { merge: true }).catch(e => {
         handleFirestoreError(e, OperationType.UPDATE, `quizzes/${finalQuizId}/private/hostOnly`);
       });
@@ -166,6 +174,17 @@ export default function HostCreate() {
               onChange={e => setTitle(e.target.value)} 
               className="text-2xl font-black text-gray-800 outline-none hover:bg-gray-100 focus:bg-gray-100 px-3 py-1 rounded-lg w-full max-w-sm" 
             />
+            <div className="flex flex-col">
+              <label className="text-xs font-bold text-gray-500 uppercase">Preview Time (s)</label>
+              <input 
+                type="number" 
+                min="1"
+                max="60"
+                value={previewTimeLimit} 
+                onChange={e => setPreviewTimeLimit(parseInt(e.target.value) || 5)} 
+                className="text-lg font-bold text-gray-800 outline-none border-b-2 border-gray-300 focus:border-blue-500 px-1 py-1 w-24 bg-transparent" 
+              />
+            </div>
           </div>
           <div className="flex gap-4">
             <button

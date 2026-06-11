@@ -53,7 +53,7 @@ export default function PlayerJoin() {
   return (
     <div className="min-h-screen bg-[#46178f] flex items-center justify-center p-4 font-sans select-none relative">
       <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center">
-        <h1 className="text-3xl font-black text-[#333] mb-6 italic tracking-tighter">QUIZHOOT!</h1>
+        <h1 className="text-3xl font-black text-[#333] mb-6 italic tracking-tighter">KTCN-TEST</h1>
         {error && (
           <div className="text-red-500 font-bold mb-4">{error}</div>
         )}

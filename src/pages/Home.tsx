@@ -35,7 +35,7 @@ export default function Home() {
               <div className="w-6 h-6 bg-[#46178f] rounded-sm transform rotate-45"></div>
             </div>
           </div>
-          <h1 className="text-4xl font-black text-[#333] tracking-tighter italic mb-2">QUIZHOOT!</h1>
+          <h1 className="text-4xl font-black text-[#333] tracking-tighter italic mb-2">KTCN-TEST</h1>
           <p className="text-gray-400 font-bold tracking-widest text-sm uppercase">Join a Game</p>
         </div>
 

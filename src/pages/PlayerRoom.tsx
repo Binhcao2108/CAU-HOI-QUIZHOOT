@@ -56,11 +56,12 @@ export default function PlayerRoom() {
         const start = Date.now();
         setQuestionStartTime(start);
         setSelectedOptions([]);
-        setTimeLeft(10);
+        const previewTime = room.previewTimeLimit || 5;
+        setTimeLeft(previewTime);
         
         const timer = setInterval(() => {
           const elapsed = Math.floor((Date.now() - start) / 1000);
-          setTimeLeft(Math.max(0, 10 - elapsed));
+          setTimeLeft(Math.max(0, previewTime - elapsed));
         }, 200);
         return () => clearInterval(timer);
       } else if (room.gameState === 'question') {

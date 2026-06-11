@@ -13,6 +13,7 @@ export interface Quiz {
   questions: Question[];
   createdAt: number;
   hideQuestionsOnPlayerDevice?: boolean;
+  previewTimeLimit?: number;
 }
 
 export interface Room {
@@ -25,6 +26,9 @@ export interface Room {
   questions: Question[];
   createdAt: number;
   hideQuestionsOnPlayerDevice?: boolean;
+  autoAdvance?: boolean;
+  isPaused?: boolean;
+  previewTimeLimit?: number;
 }
 
 export interface Player {

@@ -32,7 +32,14 @@ export default function HostRoom() {
 
     getDoc(doc(db, 'rooms', roomId, 'private', 'hostOnly'))
       .then(snap => {
-        if (snap.exists()) setCorrectAnswers(snap.data().correctAnswers);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.correctAnswersJson) {
+            setCorrectAnswers(JSON.parse(data.correctAnswersJson));
+          } else if (data.correctAnswers) {
+            setCorrectAnswers(data.correctAnswers);
+          }
+        }
       })
       .catch(e => handleFirestoreError(e, OperationType.GET, `rooms/${roomId}/private/hostOnly`));
 
@@ -44,6 +51,7 @@ export default function HostRoom() {
 
   // Timer logic
   useEffect(() => {
+    if (room?.isPaused) return;
     if (room?.status === 'playing' && room?.gameState === 'question' && timeLeft > 0) {
       timerRef.current = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
     } else if (room?.status === 'playing' && room?.gameState === 'question' && timeLeft === 0) {
@@ -55,11 +63,18 @@ export default function HostRoom() {
         setTimeLeft(room.questions[room.currentQuestionIndex].timeLimit);
       }
       updateDoc(doc(db, 'rooms', room.id), { gameState: 'question' }).catch(e => handleFirestoreError(e, OperationType.UPDATE, `rooms/${room.id}`));
+    } else if (room?.autoAdvance && room?.status === 'playing' && (room?.gameState === 'answer' || room?.gameState === 'leaderboard')) {
+      if (timeLeft > 0) {
+        timerRef.current = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
+      } else {
+        nextQuestionOrLeaderboard();
+      }
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [room?.status, room?.gameState, timeLeft, room?.currentQuestionIndex, room?.id, room?.questions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.status, room?.gameState, timeLeft, room?.currentQuestionIndex, room?.id, room?.questions, room?.autoAdvance, room?.isPaused]);
 
   // Check if all players answered
   useEffect(() => {
@@ -75,7 +90,7 @@ export default function HostRoom() {
   const startGame = async () => {
     if (!room) return;
     try {
-      setTimeLeft(10);
+      setTimeLeft(room.previewTimeLimit || 5);
       await updateDoc(doc(db, 'rooms', room.id), {
         status: 'playing',
         gameState: 'preview',
@@ -137,6 +152,7 @@ export default function HostRoom() {
       // Update room state to answer
       batch.update(doc(db, 'rooms', room.id), { gameState: 'answer' });
       await batch.commit();
+      if (room.autoAdvance) setTimeLeft(5);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `rooms/${room.id}/players`);
     }
@@ -145,12 +161,13 @@ export default function HostRoom() {
   const nextQuestionOrLeaderboard = () => {
     if (!room) return;
     if (room.gameState === 'answer') {
+      if (room.autoAdvance) setTimeLeft(5);
       updateDoc(doc(db, 'rooms', room.id), { gameState: 'leaderboard' })
         .catch(e => handleFirestoreError(e, OperationType.UPDATE, `rooms/${room.id}`));
     } else if (room.gameState === 'leaderboard') {
       if (room.currentQuestionIndex < room.questions.length - 1) {
         const nextIndex = room.currentQuestionIndex + 1;
-        setTimeLeft(10);
+        setTimeLeft(room.previewTimeLimit || 5); // Start new question preview
         updateDoc(doc(db, 'rooms', room.id), { 
            currentQuestionIndex: nextIndex,
            gameState: 'preview'
@@ -170,6 +187,22 @@ export default function HostRoom() {
       handleFirestoreError(e, OperationType.UPDATE, `rooms/${room.id}`);
     }
   };
+
+  const renderTopControls = () => (
+    <div className="absolute top-6 left-6 flex gap-2 z-50">
+      <button onClick={forceEndGame} className="bg-red-500/20 hover:bg-red-500/40 text-red-100 font-bold py-2 px-4 rounded-xl shadow-lg border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2">
+        <XCircle size={16} /> End Game
+      </button>
+      <button onClick={() => { if(room) updateDoc(doc(db, 'rooms', room.id), { autoAdvance: !room.autoAdvance }) }} className={`${room?.autoAdvance ? 'bg-green-500/20 hover:bg-green-500/40 text-green-100' : 'bg-gray-500/20 hover:bg-gray-500/40 text-gray-100'} font-bold py-2 px-4 rounded-xl shadow-lg border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2`}>
+        Auto: {room?.autoAdvance ? 'ON' : 'OFF'}
+      </button>
+      {room?.status === 'playing' && (
+        <button onClick={() => { if(room) updateDoc(doc(db, 'rooms', room.id), { isPaused: !room.isPaused }) }} className={`${room?.isPaused ? 'bg-yellow-500/40 hover:bg-yellow-500/60 text-yellow-100' : 'bg-yellow-500/20 hover:bg-yellow-500/40 text-yellow-100'} font-bold py-2 px-4 rounded-xl shadow-lg border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2`}>
+          {room?.isPaused ? 'Resume' : 'Pause'}
+        </button>
+      )}
+    </div>
+  );
 
   const exportResults = () => {
     if (!room || !players) return;
@@ -219,6 +252,39 @@ export default function HostRoom() {
 
   if (!room) return <div className="min-h-screen flex items-center justify-center font-bold text-2xl">Loading Room...</div>;
 
+  if (room.status === 'finished') {
+    const sorted = [...players].sort((a,b) => b.score - a.score);
+    return (
+      <div className="min-h-screen bg-[#46178f] flex flex-col items-center p-8 text-white font-sans select-none relative">
+        <button onClick={() => navigate('/')} className="absolute top-6 left-6 bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-xl shadow-lg border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2 z-50">
+          <ArrowLeft size={16} /> Home
+        </button>
+        <Trophy size={80} className="mb-6 text-yellow-400 drop-shadow-lg" />
+        <h1 className="text-5xl md:text-6xl font-black mb-12 text-white italic tracking-tighter">Podium</h1>
+        <div className="flex items-end gap-2 md:gap-4 max-w-4xl w-full justify-center">
+          {sorted[1] && <div className="bg-[#1368ce] flex flex-col items-center justify-end w-32 md:w-40 rounded-t-xl pb-4 font-bold h-40 md:h-48 text-white shadow-lg border-x-4 border-t-4 border-black/20">
+            <div className="text-xl md:text-2xl truncate px-2">{sorted[1].nickname}</div>
+            <div className="text-lg md:text-xl opacity-80">{sorted[1].score}</div>
+          </div>}
+          {sorted[0] && <div className="bg-[#d89e00] flex flex-col items-center justify-end w-40 md:w-48 rounded-t-xl pb-4 font-bold h-56 md:h-64 text-white shadow-2xl z-10 border-x-4 border-t-4 border-black/20">
+            <div className="text-2xl md:text-3xl truncate px-2">{sorted[0].nickname}</div>
+            <div className="text-xl md:text-2xl opacity-80">{sorted[0].score}</div>
+          </div>}
+          {sorted[2] && <div className="bg-[#26890c] flex flex-col items-center justify-end w-32 md:w-40 rounded-t-xl pb-4 font-bold h-32 md:h-36 text-white shadow-lg border-x-4 border-t-4 border-black/20">
+            <div className="text-xl md:text-2xl truncate px-2">{sorted[2].nickname}</div>
+            <div className="text-lg md:text-xl opacity-80">{sorted[2].score}</div>
+          </div>}
+        </div>
+        <div className="mt-16 flex gap-4">
+          <button onClick={exportResults} className="bg-green-500 text-white font-bold py-4 px-8 rounded-full shadow-lg hover:bg-green-600 transition-colors text-lg border-b-4 border-green-700 active:translate-y-1 active:border-b-0 flex items-center gap-2">
+            <Download size={24} /> Export Results (CSV)
+          </button>
+          <button onClick={() => navigate('/')} className="bg-white text-[#46178f] font-bold py-4 px-8 rounded-full shadow-lg hover:scale-105 transition-transform text-lg border-b-4 border-gray-300 active:translate-y-1 active:border-b-0">Exit to Home</button>
+        </div>
+      </div>
+    );
+  }
+
   const currentQ = room.questions[room.currentQuestionIndex] || room.questions[0];
   const answeredCount = players.filter(p => p.currentAnswer?.questionIndex === room.currentQuestionIndex).length;
 
@@ -265,6 +331,7 @@ export default function HostRoom() {
   if (room.gameState === 'preview') {
     return (
       <div className="min-h-screen bg-[#46178f] flex flex-col items-center justify-center p-4 md:p-8 font-sans select-none text-white relative">
+        {renderTopControls()}
         <div className="animate-pulse flex flex-col items-center">
           <span className="text-xl md:text-2xl font-black tracking-[0.2em] mb-4 opacity-50 uppercase">Get Ready</span>
           {currentQ.pointsMultiplier === 2 && (
@@ -283,46 +350,11 @@ export default function HostRoom() {
     );
   }
 
-  if (room.status === 'finished') {
-    const sorted = [...players].sort((a,b) => b.score - a.score);
-    return (
-      <div className="min-h-screen bg-[#46178f] flex flex-col items-center p-8 text-white font-sans select-none relative">
-        <button onClick={() => navigate('/')} className="absolute top-6 left-6 bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-xl shadow-lg border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2 z-50">
-          <ArrowLeft size={16} /> Home
-        </button>
-        <Trophy size={80} className="mb-6 text-yellow-400 drop-shadow-lg" />
-        <h1 className="text-5xl md:text-6xl font-black mb-12 text-white italic tracking-tighter">Podium</h1>
-        <div className="flex items-end gap-2 md:gap-4 max-w-4xl w-full justify-center">
-          {sorted[1] && <div className="bg-[#1368ce] flex flex-col items-center justify-end w-32 md:w-40 rounded-t-xl pb-4 font-bold h-40 md:h-48 text-white shadow-lg border-x-4 border-t-4 border-black/20">
-            <div className="text-xl md:text-2xl truncate px-2">{sorted[1].nickname}</div>
-            <div className="text-lg md:text-xl opacity-80">{sorted[1].score}</div>
-          </div>}
-          {sorted[0] && <div className="bg-[#d89e00] flex flex-col items-center justify-end w-40 md:w-48 rounded-t-xl pb-4 font-bold h-56 md:h-64 text-white shadow-2xl z-10 border-x-4 border-t-4 border-black/20">
-            <div className="text-2xl md:text-3xl truncate px-2">{sorted[0].nickname}</div>
-            <div className="text-xl md:text-2xl opacity-80">{sorted[0].score}</div>
-          </div>}
-          {sorted[2] && <div className="bg-[#26890c] flex flex-col items-center justify-end w-32 md:w-40 rounded-t-xl pb-4 font-bold h-32 md:h-36 text-white shadow-lg border-x-4 border-t-4 border-black/20">
-            <div className="text-xl md:text-2xl truncate px-2">{sorted[2].nickname}</div>
-            <div className="text-lg md:text-xl opacity-80">{sorted[2].score}</div>
-          </div>}
-        </div>
-        <div className="mt-16 flex gap-4">
-          <button onClick={exportResults} className="bg-green-500 text-white font-bold py-4 px-8 rounded-full shadow-lg hover:bg-green-600 transition-colors text-lg border-b-4 border-green-700 active:translate-y-1 active:border-b-0 flex items-center gap-2">
-            <Download size={24} /> Export Results (CSV)
-          </button>
-          <button onClick={() => navigate('/')} className="bg-white text-[#46178f] font-bold py-4 px-8 rounded-full shadow-lg hover:scale-105 transition-transform text-lg border-b-4 border-gray-300 active:translate-y-1 active:border-b-0">Exit to Home</button>
-        </div>
-      </div>
-    );
-  }
-
   if (room.gameState === 'leaderboard') {
     const sorted = [...players].sort((a,b) => b.score - a.score).slice(0, 5);
     return (
       <div className="min-h-screen bg-[#46178f] flex flex-col items-center p-4 md:p-8 font-sans select-none text-white relative">
-        <button onClick={forceEndGame} className="absolute top-6 left-6 bg-red-500/20 hover:bg-red-500/40 text-white font-bold py-2 px-4 rounded-xl shadow-lg border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2 z-50">
-          <XCircle size={16} /> End Game
-        </button>
+        {renderTopControls()}
         <div className="w-full flex justify-between items-center mb-8 max-w-4xl bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 mt-12">
           <h1 className="text-2xl md:text-4xl font-black italic tracking-tighter">Leaderboard</h1>
           <button onClick={nextQuestionOrLeaderboard} className="bg-white text-[#46178f] font-bold py-3 px-6 rounded-xl flex items-center shadow-lg border-b-4 border-gray-300 active:translate-y-1 active:border-b-0 hover:bg-gray-50 transition-all">
@@ -365,15 +397,13 @@ export default function HostRoom() {
 
   return (
     <div className="min-h-screen bg-[#46178f] text-white p-4 md:p-6 flex flex-col font-sans select-none overflow-hidden relative">
-      <button onClick={forceEndGame} className="absolute top-6 left-6 bg-red-500/20 hover:bg-red-500/40 text-red-100 font-bold py-2 px-4 rounded-xl shadow-lg border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2 z-50">
-        <XCircle size={16} /> End Game
-      </button>
+      {renderTopControls()}
       <header className="flex justify-between items-center mb-6 h-16 bg-white/10 backdrop-blur-md rounded-2xl px-4 md:px-8 border border-white/20 flex-shrink-0 mt-12">
         <div className="flex items-center gap-4">
           <div className="hidden md:flex w-10 h-10 bg-white rounded-lg items-center justify-center">
             <div className="w-6 h-6 bg-[#46178f] rounded-sm"></div>
           </div>
-          <span className="text-xl md:text-2xl font-black tracking-tighter italic">QUIZHOOT!</span>
+          <span className="text-xl md:text-2xl font-black tracking-tighter italic">KTCN-TEST</span>
         </div>
         <div className="flex items-center bg-[#2d0f5a] px-4 md:px-6 py-2 rounded-xl border border-white/10 hidden md:flex">
           <span className="text-sm uppercase tracking-widest opacity-60 mr-4 font-bold">Game PIN:</span>
@@ -401,6 +431,11 @@ export default function HostRoom() {
                 <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">Multi-Select</span>
               )}
             </span>
+            {room.isPaused && (
+              <span className="bg-yellow-500 text-white px-4 py-1 rounded-full font-bold uppercase tracking-widest text-sm mb-4">
+                PAUSED
+              </span>
+            )}
             {currentQ.pointsMultiplier === 2 && (
               <div className="animate-bounce mt-2">
                 <span className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-black tracking-widest px-6 py-2 rounded-full text-lg md:text-xl shadow-lg border-2 border-yellow-200 uppercase transform -rotate-2 inline-block">

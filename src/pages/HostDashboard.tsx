@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
-import { Plus, Play, LogOut, ArrowLeft, Upload, Download, Edit2, FileDown } from 'lucide-react';
+import { Plus, Play, LogOut, ArrowLeft, Upload, Download, Edit2, FileDown, Trash2 } from 'lucide-react';
 import { Quiz } from '../types';
 import * as XLSX from 'xlsx';
 
 export default function HostDashboard() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
+  const [autoAdvance, setAutoAdvance] = useState(false);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,7 +114,7 @@ export default function HostDashboard() {
         };
 
         await setDoc(quizRef, quizDataToSave);
-        await setDoc(doc(db, 'quizzes', quizId, 'private', 'hostOnly'), { correctAnswers });
+        await setDoc(doc(db, 'quizzes', quizId, 'private', 'hostOnly'), { correctAnswersJson: JSON.stringify(correctAnswers) });
         
         fetchQuizzes(hostId);
       } catch (err) {
@@ -148,7 +150,12 @@ export default function HostDashboard() {
   const exportQuiz = async (quiz: Quiz) => {
     try {
       const privateSnap = await getDoc(doc(db, 'quizzes', quiz.id, 'private', 'hostOnly'));
-      const correctAnswers = privateSnap.exists() ? privateSnap.data().correctAnswers : Array(quiz.questions.length).fill(0);
+      let correctAnswers = Array(quiz.questions.length).fill(0);
+      if (privateSnap.exists()) {
+        const data = privateSnap.data();
+        if (data.correctAnswersJson) correctAnswers = JSON.parse(data.correctAnswersJson);
+        else if (data.correctAnswers) correctAnswers = data.correctAnswers;
+      }
       
       const quizData = {
         title: quiz.title,
@@ -174,7 +181,12 @@ export default function HostDashboard() {
     try {
       // Fetch private answers
       const privateSnap = await getDoc(doc(db, 'quizzes', quiz.id, 'private', 'hostOnly'));
-      const correctAnswers = privateSnap.exists() ? privateSnap.data().correctAnswers : [];
+      let correctAnswers = [];
+      if (privateSnap.exists()) {
+        const data = privateSnap.data();
+        if (data.correctAnswersJson) correctAnswers = JSON.parse(data.correctAnswersJson);
+        else if (data.correctAnswers) correctAnswers = data.correctAnswers;
+      }
 
       // Generate a 6-digit PIN string
       const pin = Math.floor(100000 + Math.random() * 900000).toString();
@@ -189,13 +201,15 @@ export default function HostDashboard() {
         questions: quiz.questions,
         createdAt: serverTimestamp(),
         hideQuestionsOnPlayerDevice: quiz.hideQuestionsOnPlayerDevice || false,
+        previewTimeLimit: quiz.previewTimeLimit || 5,
+        autoAdvance,
       };
 
       await setDoc(doc(db, 'rooms', roomId), roomData).catch(e => {
         handleFirestoreError(e, OperationType.CREATE, `rooms/${roomId}`);
       });
 
-      const privateData = { correctAnswers };
+      const privateData = { correctAnswersJson: JSON.stringify(correctAnswers) };
       await setDoc(doc(db, 'rooms', roomId, 'private', 'hostOnly'), privateData).catch(e => {
         handleFirestoreError(e, OperationType.CREATE, `rooms/${roomId}/private/hostOnly`);
       });
@@ -204,6 +218,17 @@ export default function HostDashboard() {
     } catch (err) {
       console.error(err);
       alert("Failed to create game room.");
+    }
+  };
+
+  const deleteQuiz = async (quizId: string) => {
+    try {
+      await deleteDoc(doc(db, 'quizzes', quizId, 'private', 'hostOnly'));
+      await deleteDoc(doc(db, 'quizzes', quizId));
+      setQuizzes(prev => prev.filter(q => q.id !== quizId));
+    } catch (e) {
+      console.error("Failed to delete quiz:", e);
+      alert("Failed to delete quiz");
     }
   };
 
@@ -227,6 +252,17 @@ export default function HostDashboard() {
               <h1 className="text-3xl font-black text-[#333] tracking-tighter italic">Library</h1>
               <p className="text-gray-500 font-medium">Host Dashboard</p>
             </div>
+          </div>
+          <div className="flex items-center gap-4 border-r border-gray-200 pr-4 mr-4 hidden md:flex">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={autoAdvance} 
+                onChange={e => setAutoAdvance(e.target.checked)}
+                className="w-5 h-5 accent-blue-600 cursor-pointer"
+              />
+              <span className="text-gray-700 font-bold select-none">Auto-Advance</span>
+            </label>
           </div>
           <div className="flex gap-4">
             <input 
@@ -294,7 +330,12 @@ export default function HostDashboard() {
                     className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 rounded-xl shadow border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
                   >
                     <Download size={16} />
-                    Export
+                  </button>
+                  <button
+                    onClick={() => deleteQuiz(quiz.id)}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 rounded-xl shadow border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
