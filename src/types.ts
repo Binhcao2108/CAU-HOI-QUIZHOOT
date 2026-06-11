@@ -34,6 +34,12 @@ export interface Player {
     responseTime: number;
     questionIndex: number;
   } | null;
+  answerHistory?: {
+    [questionIndex: number]: {
+      optionIndex: number;
+      isCorrect: boolean;
+    }
+  };
 }
 
 export interface Answer {

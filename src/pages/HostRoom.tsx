@@ -4,7 +4,7 @@ import { doc, collection, onSnapshot, updateDoc, getDoc, writeBatch } from 'fire
 import { db, auth } from '../firebase';
 import { Room, Player } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
-import { Users, Trophy, ChevronRight, Play, ArrowLeft, XCircle } from 'lucide-react';
+import { Users, Trophy, ChevronRight, Play, ArrowLeft, XCircle, Download } from 'lucide-react';
 
 export default function HostRoom() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -86,13 +86,29 @@ export default function HostRoom() {
       players.forEach(p => {
         if (p.currentAnswer?.questionIndex === room.currentQuestionIndex) {
           const isCorrect = p.currentAnswer.optionIndex === correctAnswers[room.currentQuestionIndex];
+          let newScore = p.score;
           if (isCorrect) {
             const timeLimit = room.questions[room.currentQuestionIndex].timeLimit;
             // Kahoot formula: 500 + 500 * (1 - responseTime / timeLimit)
             const pts = Math.max(0, 500 + 500 * (1 - (p.currentAnswer.responseTime / 1000) / timeLimit));
-            const newScore = p.score + Math.round(pts);
-            batch.update(doc(db, 'rooms', room.id, 'players', p.id), { score: newScore });
+            newScore = p.score + Math.round(pts);
           }
+          
+          batch.update(doc(db, 'rooms', room.id, 'players', p.id), { 
+            score: newScore,
+            [`answerHistory.${room.currentQuestionIndex}`]: {
+              optionIndex: p.currentAnswer.optionIndex,
+              isCorrect
+            }
+          });
+        } else {
+           // Did not answer
+           batch.update(doc(db, 'rooms', room.id, 'players', p.id), {
+             [`answerHistory.${room.currentQuestionIndex}`]: {
+               optionIndex: -1,
+               isCorrect: false
+             }
+           });
         }
       });
       
@@ -131,6 +147,52 @@ export default function HostRoom() {
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `rooms/${room.id}`);
     }
+  };
+
+  const exportResults = () => {
+    if (!room || !players) return;
+    
+    // Create the CSV data header with UTF-8 BOM for proper Excel rendering
+    let csvData = '\uFEFFPlayer Name,Score,Correct Answers,Incorrect Answers,';
+    
+    // Add Question headers
+    room.questions.forEach((q, i) => {
+      csvData += `Q${i + 1} (${q.text.replace(/,/g, '')}),`;
+    });
+    csvData += '\n';
+    
+    // Rows
+    const sorted = [...players].sort((a,b) => b.score - a.score);
+    sorted.forEach(p => {
+      let correct = 0;
+      let incorrect = 0;
+      let qStatuses = '';
+      
+      room.questions.forEach((q, i) => {
+        const h = p.answerHistory?.[i];
+        if (h && h.isCorrect) {
+          correct++;
+          qStatuses += 'Correct,';
+        } else if (h && h.optionIndex !== -1) {
+          incorrect++;
+          qStatuses += 'Incorrect,';
+        } else {
+          incorrect++;
+          qStatuses += 'Missed,';
+        }
+      });
+      
+      csvData += `${p.nickname.replace(/,/g, '')},${p.score},${correct},${incorrect},${qStatuses}\n`;
+    });
+    
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `quiz_results_${room.pin}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (!room) return <div className="min-h-screen flex items-center justify-center font-bold text-2xl">Loading Room...</div>;
@@ -201,7 +263,12 @@ export default function HostRoom() {
             <div className="text-lg md:text-xl opacity-80">{sorted[2].score}</div>
           </div>}
         </div>
-        <button onClick={() => navigate('/')} className="mt-16 bg-white text-[#46178f] font-bold py-4 px-8 rounded-full shadow-lg hover:scale-105 transition-transform text-lg border-b-4 border-gray-300 active:translate-y-1 active:border-b-0">Exit to Home</button>
+        <div className="mt-16 flex gap-4">
+          <button onClick={exportResults} className="bg-green-500 text-white font-bold py-4 px-8 rounded-full shadow-lg hover:bg-green-600 transition-colors text-lg border-b-4 border-green-700 active:translate-y-1 active:border-b-0 flex items-center gap-2">
+            <Download size={24} /> Export Results (CSV)
+          </button>
+          <button onClick={() => navigate('/')} className="bg-white text-[#46178f] font-bold py-4 px-8 rounded-full shadow-lg hover:scale-105 transition-transform text-lg border-b-4 border-gray-300 active:translate-y-1 active:border-b-0">Exit to Home</button>
+        </div>
       </div>
     );
   }
