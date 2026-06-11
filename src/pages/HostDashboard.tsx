@@ -71,17 +71,30 @@ export default function HostDashboard() {
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
           
           title = file.name.replace('.xlsx', '');
-          // Assuming row 0 is header: Question, Option 1, Option 2, Option 3, Option 4, Correct (1-4), Time Limit
+          // Assuming row 0 is header
           for (let i = 1; i < jsonData.length; i++) {
             const row = jsonData[i];
             if (!row || row.length === 0 || !row[0]) continue;
+            
+            const qType = (row[7] || '').toString().toLowerCase() === 'multiple' ? 'multiple' : 'single';
+            const ptsMultiplier = parseInt(row[8]) || 1;
+            
             questions.push({
               text: row[0] || '',
               options: [row[1] || '', row[2] || '', row[3] || '', row[4] || ''],
-              timeLimit: parseInt(row[6]) || 20
+              timeLimit: parseInt(row[6]) || 20,
+              type: qType,
+              pointsMultiplier: ptsMultiplier
             });
-            const correctIndex = parseInt(row[5]) - 1;
-            correctAnswers.push(!isNaN(correctIndex) && correctIndex >= 0 && correctIndex < 4 ? correctIndex : 0);
+            
+            const correctRaw = (row[5] || '1').toString();
+            if (qType === 'multiple') {
+              const correctIndexes = correctRaw.split(',').map((s: string) => parseInt(s.trim()) - 1).filter((n: number) => !isNaN(n) && n >= 0 && n < 4);
+              correctAnswers.push(correctIndexes.length > 0 ? correctIndexes : [0]);
+            } else {
+              const correctIndex = parseInt(correctRaw) - 1;
+              correctAnswers.push(!isNaN(correctIndex) && correctIndex >= 0 && correctIndex < 4 ? correctIndex : 0);
+            }
           }
         }
 
@@ -121,8 +134,9 @@ export default function HostDashboard() {
 
   const downloadTemplate = () => {
     const ws_data = [
-      ['Question', 'Option 1', 'Option 2', 'Option 3', 'Option 4', 'Correct Option (1-4)', 'Time Limit'],
-      ['What is the capital of France?', 'London', 'Berlin', 'Paris', 'Madrid', 3, 20]
+      ['Question', 'Option 1', 'Option 2', 'Option 3', 'Option 4', 'Correct Option (1-4, comma separated for multiple)', 'Time Limit', 'Type (single/multiple)', 'Points Multiplier (1 or 2)'],
+      ['What is the capital of France?', 'London', 'Berlin', 'Paris', 'Madrid', '3', 20, 'single', 1],
+      ['Which of these are programming languages?', 'Python', 'Snake', 'Java', 'Coffee', '1,3', 30, 'multiple', 2]
     ];
     const ws = XLSX.utils.aoa_to_sheet(ws_data);
     const wb = XLSX.utils.book_new();

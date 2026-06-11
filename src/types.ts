@@ -2,6 +2,8 @@ export interface Question {
   text: string;
   options: string[];
   timeLimit: number;
+  type?: 'single' | 'multiple';
+  pointsMultiplier?: number;
 }
 
 export interface Quiz {
@@ -30,20 +32,23 @@ export interface Player {
   score: number;
   joinedAt: number;
   currentAnswer?: {
-    optionIndex: number;
+    optionIndex?: number;
+    optionIndexes?: number[];
     responseTime: number;
     questionIndex: number;
   } | null;
   answerHistory?: {
     [questionIndex: number]: {
-      optionIndex: number;
+      optionIndex?: number;
+      optionIndexes?: number[];
       isCorrect: boolean;
     }
   };
 }
 
 export interface Answer {
-  optionIndex: number;
+  optionIndex?: number;
+  optionIndexes?: number[];
   responseTime: number;
   submittedAt: number;
 }

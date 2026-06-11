@@ -11,7 +11,7 @@ export default function HostRoom() {
   const navigate = useNavigate();
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [correctAnswers, setCorrectAnswers] = useState<number[]>([]);
+  const [correctAnswers, setCorrectAnswers] = useState<(number | number[])[]>([]);
   const [timeLeft, setTimeLeft] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -57,6 +57,7 @@ export default function HostRoom() {
   // Check if all players answered
   useEffect(() => {
     if (room?.status === 'playing' && room?.gameState === 'question' && players.length > 0) {
+      const currentQ = room.questions[room.currentQuestionIndex];
       const allAnswered = players.every(p => p.currentAnswer?.questionIndex === room.currentQuestionIndex);
       if (allAnswered) {
         handleTimeUp();
@@ -86,19 +87,32 @@ export default function HostRoom() {
       const batch = writeBatch(db);
       players.forEach(p => {
         if (p.currentAnswer?.questionIndex === room.currentQuestionIndex) {
-          const isCorrect = p.currentAnswer.optionIndex === correctAnswers[room.currentQuestionIndex];
+          const expectedAnswer = correctAnswers[room.currentQuestionIndex];
+          const isMultiple = Array.isArray(expectedAnswer);
+          
+          let isCorrect = false;
+          if (isMultiple) {
+            const playerIndexes = p.currentAnswer.optionIndexes || (p.currentAnswer.optionIndex !== undefined ? [p.currentAnswer.optionIndex] : []);
+            const exactMatch = playerIndexes.length === expectedAnswer.length && playerIndexes.every(idx => expectedAnswer.includes(idx));
+            isCorrect = exactMatch;
+          } else {
+            isCorrect = p.currentAnswer.optionIndex === expectedAnswer;
+          }
+
           let newScore = p.score;
           if (isCorrect) {
             const timeLimit = room.questions[room.currentQuestionIndex].timeLimit;
+            const multiplier = room.questions[room.currentQuestionIndex].pointsMultiplier || 1;
             // Kahoot formula: 500 + 500 * (1 - responseTime / timeLimit)
             const pts = Math.max(0, 500 + 500 * (1 - (p.currentAnswer.responseTime / 1000) / timeLimit));
-            newScore = p.score + Math.round(pts);
+            newScore = p.score + Math.round(pts * multiplier);
           }
           
           batch.update(doc(db, 'rooms', room.id, 'players', p.id), { 
             score: newScore,
             [`answerHistory.${room.currentQuestionIndex}`]: {
-              optionIndex: p.currentAnswer.optionIndex,
+              optionIndex: p.currentAnswer.optionIndex !== undefined ? p.currentAnswer.optionIndex : null,
+              optionIndexes: p.currentAnswer.optionIndexes || null,
               isCorrect
             }
           });
@@ -174,7 +188,7 @@ export default function HostRoom() {
         if (h && h.isCorrect) {
           correct++;
           qStatuses += 'Correct,';
-        } else if (h && h.optionIndex !== -1) {
+        } else if (h && (h.optionIndex !== -1 || h.optionIndexes?.length)) {
           incorrect++;
           qStatuses += 'Incorrect,';
         } else {
@@ -304,7 +318,14 @@ export default function HostRoom() {
 
   // showing_question or showing_answer
   const isShowAnswer = room.gameState === 'answer';
-  const correctOption = correctAnswers[room.currentQuestionIndex];
+  const expectedAnswer = correctAnswers[room.currentQuestionIndex];
+  
+  const isCorrectHelper = (index: number) => {
+    if (Array.isArray(expectedAnswer)) {
+      return expectedAnswer.includes(index);
+    }
+    return expectedAnswer === index;
+  };
   
   const colors = ['bg-[#e21b3c]', 'bg-[#1368ce]', 'bg-[#d89e00]', 'bg-[#26890c]'];
   const shapes = [
@@ -345,8 +366,14 @@ export default function HostRoom() {
           <div className="absolute top-0 left-0 w-full h-2 bg-gray-200">
             <div className="h-full bg-[#1368ce] transition-all duration-1000" style={{ width: `${(timeLeft / (room.questions[room.currentQuestionIndex]?.timeLimit || 1)) * 100}%` }}></div>
           </div>
-          <span className="text-[#333] text-xs md:text-sm font-black uppercase tracking-[0.2em] mb-4 opacity-50">
+          <span className="text-[#333] text-xs md:text-sm font-black uppercase tracking-[0.2em] mb-4 opacity-50 flex items-center gap-2">
             Question {room.currentQuestionIndex + 1} of {room.questions.length}
+            {currentQ.pointsMultiplier === 2 && (
+              <span className="bg-purple-100 text-[#46178f] px-2 py-0.5 rounded-md">2x Points</span>
+            )}
+            {currentQ.type === 'multiple' && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">Multi-Select</span>
+            )}
           </span>
           <h1 className="text-[#333] text-2xl md:text-4xl font-black leading-tight max-w-3xl px-4">{currentQ.text}</h1>
           
@@ -363,30 +390,19 @@ export default function HostRoom() {
       </main>
 
       <footer className="grid grid-cols-2 gap-2 md:gap-4 h-auto md:h-[240px] flex-shrink-0">
-        <div className="grid grid-cols-2 gap-2 md:gap-4">
-          <div className={`${colors[0]} ${isShowAnswer && correctOption !== 0 ? 'opacity-30' : 'opacity-100'} rounded-2xl flex flex-col md:flex-row items-center justify-center md:justify-start p-4 md:p-6 gap-2 md:gap-4 shadow-lg border-b-4 border-black/20 transition-opacity duration-300 relative`}>
-            {shapes[0]}
-            <span className="text-sm md:text-2xl font-bold break-words text-center md:text-left">{currentQ.options[0]}</span>
-            {isShowAnswer && correctOption === 0 && <div className="absolute top-2 right-2 md:top-4 md:right-4"><div className="w-6 h-6 md:w-8 md:h-8 bg-white text-green-500 rounded-full flex items-center justify-center text-xl">✓</div></div>}
-          </div>
-          <div className={`${colors[1]} ${isShowAnswer && correctOption !== 1 ? 'opacity-30' : 'opacity-100'} rounded-2xl flex flex-col md:flex-row items-center justify-center md:justify-start p-4 md:p-6 gap-2 md:gap-4 shadow-lg border-b-4 border-black/20 transition-opacity duration-300 relative`}>
-            {shapes[1]}
-            <span className="text-sm md:text-2xl font-bold break-words text-center md:text-left">{currentQ.options[1]}</span>
-            {isShowAnswer && correctOption === 1 && <div className="absolute top-2 right-2 md:top-4 md:right-4"><div className="w-6 h-6 md:w-8 md:h-8 bg-white text-green-500 rounded-full flex items-center justify-center text-xl">✓</div></div>}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 md:gap-4">
-          <div className={`${colors[2]} ${isShowAnswer && correctOption !== 2 ? 'opacity-30' : 'opacity-100'} rounded-2xl flex flex-col md:flex-row items-center justify-center md:justify-start p-4 md:p-6 gap-2 md:gap-4 shadow-lg border-b-4 border-black/20 transition-opacity duration-300 relative`}>
-            {shapes[2]}
-            <span className="text-sm md:text-2xl font-bold break-words text-center md:text-left">{currentQ.options[2]}</span>
-            {isShowAnswer && correctOption === 2 && <div className="absolute top-2 right-2 md:top-4 md:right-4"><div className="w-6 h-6 md:w-8 md:h-8 bg-white text-green-500 rounded-full flex items-center justify-center text-xl">✓</div></div>}
-          </div>
-          <div className={`${colors[3]} ${isShowAnswer && correctOption !== 3 ? 'opacity-30' : 'opacity-100'} rounded-2xl flex flex-col md:flex-row items-center justify-center md:justify-start p-4 md:p-6 gap-2 md:gap-4 shadow-lg border-b-4 border-black/20 transition-opacity duration-300 relative`}>
-            {shapes[3]}
-            <span className="text-sm md:text-2xl font-bold break-words text-center md:text-left">{currentQ.options[3]}</span>
-            {isShowAnswer && correctOption === 3 && <div className="absolute top-2 right-2 md:top-4 md:right-4"><div className="w-6 h-6 md:w-8 md:h-8 bg-white text-green-500 rounded-full flex items-center justify-center text-xl">✓</div></div>}
-          </div>
-        </div>
+        {[0, 1, 2, 3].map(i => (
+          currentQ.options[i] ? (
+            <div key={i} className={`${colors[i]} ${isShowAnswer && !isCorrectHelper(i) ? 'opacity-30' : 'opacity-100'} rounded-2xl flex flex-col md:flex-row items-center justify-center md:justify-start p-4 md:p-6 gap-2 md:gap-4 shadow-lg border-b-4 border-black/20 transition-opacity duration-300 relative`}>
+              {shapes[i]}
+              <span className="text-sm md:text-2xl font-bold break-words text-center md:text-left">{currentQ.options[i]}</span>
+              {isShowAnswer && isCorrectHelper(i) && (
+                <div className="absolute top-2 right-2 md:top-4 md:right-4">
+                  <div className="w-6 h-6 md:w-8 md:h-8 bg-white text-green-500 rounded-full flex items-center justify-center text-xl">✓</div>
+                </div>
+              )}
+            </div>
+          ) : null
+        ))}
       </footer>
     </div>
   );

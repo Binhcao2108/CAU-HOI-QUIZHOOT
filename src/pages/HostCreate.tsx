@@ -10,9 +10,9 @@ export default function HostCreate() {
   const { quizId } = useParams<{ quizId: string }>();
   const [title, setTitle] = useState('My Awesome Quiz');
   const [questions, setQuestions] = useState<Question[]>([
-    { text: '', options: ['', '', '', ''], timeLimit: 20 }
+    { text: '', options: ['', '', '', ''], timeLimit: 20, type: 'single', pointsMultiplier: 1 }
   ]);
-  const [correctAnswers, setCorrectAnswers] = useState<number[]>([0]);
+  const [correctAnswers, setCorrectAnswers] = useState<(number | number[])[]>([0]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(!!quizId);
   const navigate = useNavigate();
@@ -25,7 +25,11 @@ export default function HostCreate() {
         if (quizSnap.exists()) {
           const quizData = quizSnap.data();
           setTitle(quizData.title);
-          setQuestions(quizData.questions);
+          setQuestions(quizData.questions.map((q: any) => ({
+            ...q,
+            type: q.type || 'single',
+            pointsMultiplier: q.pointsMultiplier || 1
+          })));
           
           const privateSnap = await getDoc(doc(db, 'quizzes', quizId, 'private', 'hostOnly'));
           if (privateSnap.exists()) {
@@ -70,13 +74,24 @@ export default function HostCreate() {
   };
 
   const addQuestion = () => {
-    setQuestions([...questions, { text: '', options: ['', '', '', ''], timeLimit: 20 }]);
+    setQuestions([...questions, { text: '', options: ['', '', '', ''], timeLimit: 20, type: 'single', pointsMultiplier: 1 }]);
     setCorrectAnswers([...correctAnswers, 0]);
   };
 
   const updateQuestion = (index: number, field: keyof Question, value: any) => {
     const newQs = [...questions];
     newQs[index] = { ...newQs[index], [field]: value };
+    // If switching from multiple to single, reset correctAnswers to the first selection or 0
+    if (field === 'type') {
+      const newCA = [...correctAnswers];
+      if (value === 'single' && Array.isArray(newCA[index])) {
+        newCA[index] = (newCA[index] as number[]).length > 0 ? (newCA[index] as number[])[0] : 0;
+        setCorrectAnswers(newCA);
+      } else if (value === 'multiple' && !Array.isArray(newCA[index])) {
+        newCA[index] = [newCA[index] as number];
+        setCorrectAnswers(newCA);
+      }
+    }
     setQuestions(newQs);
   };
 
@@ -194,24 +209,52 @@ export default function HostCreate() {
               className="w-full text-xl font-bold p-4 bg-gray-50 rounded-xl mb-4 border-2 border-transparent focus:border-gray-300 focus:outline-none focus:bg-white transition-colors"
             />
 
-            <div className="mb-4">
-              <label className="text-sm font-bold text-gray-500 mb-2 block">Time Limit</label>
-              <select
-                value={q.timeLimit}
-                onChange={(e) => updateQuestion(qIndex, 'timeLimit', parseInt(e.target.value))}
-                className="p-2 border-2 border-gray-200 font-bold text-gray-700 rounded-lg bg-white focus:outline-none focus:border-gray-400"
-              >
-                <option value={10}>10 seconds</option>
-                <option value={20}>20 seconds</option>
-                <option value={30}>30 seconds</option>
-                <option value={60}>60 seconds</option>
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 bg-gray-50 p-4 rounded-xl">
+              <div>
+                <label className="text-sm font-bold text-gray-500 mb-2 block">Time Limit</label>
+                <select
+                  value={q.timeLimit}
+                  onChange={(e) => updateQuestion(qIndex, 'timeLimit', parseInt(e.target.value))}
+                  className="w-full p-2 border-2 border-gray-200 font-bold text-gray-700 rounded-lg bg-white focus:outline-none focus:border-gray-400"
+                >
+                  <option value={10}>10 seconds</option>
+                  <option value={20}>20 seconds</option>
+                  <option value={30}>30 seconds</option>
+                  <option value={60}>60 seconds</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-bold text-gray-500 mb-2 block">Question Type</label>
+                <select
+                  value={q.type || 'single'}
+                  onChange={(e) => updateQuestion(qIndex, 'type', e.target.value)}
+                  className="w-full p-2 border-2 border-gray-200 font-bold text-gray-700 rounded-lg bg-white focus:outline-none focus:border-gray-400"
+                >
+                  <option value="single">Single Select</option>
+                  <option value="multiple">Multi-Select</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-bold text-gray-500 mb-2 block">Points</label>
+                <select
+                  value={q.pointsMultiplier || 1}
+                  onChange={(e) => updateQuestion(qIndex, 'pointsMultiplier', parseInt(e.target.value))}
+                  className="w-full p-2 border-2 border-gray-200 font-bold text-gray-700 rounded-lg bg-white focus:outline-none focus:border-gray-400"
+                >
+                  <option value={1}>Standard (1x)</option>
+                  <option value={2}>Double (2x)</option>
+                </select>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
               {q.options.map((opt, oIndex) => {
                 const colors = ['bg-[#e21b3c] hover:opacity-90', 'bg-[#1368ce] hover:opacity-90', 'bg-[#d89e00] hover:opacity-90', 'bg-[#26890c] hover:opacity-90'];
-                const isCorrect = correctAnswers[qIndex] === oIndex;
+                
+                const isCorrect = Array.isArray(correctAnswers[qIndex]) 
+                  ? (correctAnswers[qIndex] as number[]).includes(oIndex)
+                  : correctAnswers[qIndex] === oIndex;
+
                 return (
                   <div key={oIndex} className="relative flex items-center group">
                     <input
@@ -225,12 +268,22 @@ export default function HostCreate() {
                       title="Mark as correct"
                       onClick={() => {
                         const newCA = [...correctAnswers];
-                        newCA[qIndex] = oIndex;
+                        if (q.type === 'multiple') {
+                           let currentArr = Array.isArray(newCA[qIndex]) ? [...(newCA[qIndex] as number[])] : [newCA[qIndex] as number];
+                           if (currentArr.includes(oIndex)) {
+                             currentArr = currentArr.filter(c => c !== oIndex);
+                           } else {
+                             currentArr.push(oIndex);
+                           }
+                           newCA[qIndex] = currentArr;
+                        } else {
+                           newCA[qIndex] = oIndex;
+                        }
                         setCorrectAnswers(newCA);
                       }}
-                      className={`absolute left-3 w-8 h-8 flex items-center justify-center rounded-full border-2 transition-all shadow-sm ${isCorrect ? 'bg-white text-green-500 border-white' : 'bg-black/20 text-white/50 border-white/30 hover:border-white hover:text-white group-hover:bg-black/30'}`}
+                      className={`absolute left-3 w-8 h-8 flex items-center justify-center ${q.type === 'multiple' ? 'rounded-md' : 'rounded-full'} border-2 transition-all shadow-sm ${isCorrect ? 'bg-white text-green-500 border-white' : 'bg-black/20 text-white/50 border-white/30 hover:border-white hover:text-white group-hover:bg-black/30'}`}
                     >
-                      ✓
+                      {isCorrect && '✓'}
                     </button>
                   </div>
                 );
