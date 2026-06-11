@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "Game room",
+      "type": "object",
+      "properties": {
+        "hostId": { "type": "string" },
+        "pin": { "type": "string" },
+        "status": { "type": "string" },
+        "currentQuestionIndex": { "type": "integer" },
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "options": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "timeLimit": { "type": "integer" }
+            }
+          }
+        },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["hostId", "pin", "status", "currentQuestionIndex", "questions", "createdAt"]
+    },
+    "RoomPrivate": {
+      "title": "RoomPrivate",
+      "description": "Private room data (answers)",
+      "type": "object",
+      "properties": {
+        "correctAnswers": {
+          "type": "array",
+          "items": { "type": "integer" }
+        }
+      },
+      "required": ["correctAnswers"]
+    },
+    "Player": {
+      "title": "Player",
+      "description": "Player in a room",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "nickname": { "type": "string" },
+        "score": { "type": "integer" },
+        "joinedAt": { "type": "integer" }
+      },
+      "required": ["roomId", "nickname", "score", "joinedAt"]
+    },
+    "Answer": {
+      "title": "Answer",
+      "description": "Player's answer for a question",
+      "type": "object",
+      "properties": {
+        "optionIndex": { "type": "integer" },
+        "responseTime": { "type": "integer" },
+        "submittedAt": { "type": "integer" }
+      },
+      "required": ["optionIndex", "responseTime", "submittedAt"]
+    }
+  },
+  "firestore": {
+    "rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/Room" },
+      "description": "Rooms collection."
+    },
+    "rooms/{roomId}/private/{privateId}": {
+      "schema": { "$ref": "#/entities/RoomPrivate" },
+      "description": "Host-only data."
+    },
+    "rooms/{roomId}/players/{playerId}": {
+      "schema": { "$ref": "#/entities/Player" },
+      "description": "Players in the room."
+    },
+    "rooms/{roomId}/players/{playerId}/answers/{questionIndex}": {
+      "schema": { "$ref": "#/entities/Answer" },
+      "description": "Answers submitted by player."
+    }
+  }
+}
