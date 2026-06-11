@@ -4,7 +4,7 @@ import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Question, Quiz } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
-import { PlusCircle, Trash2, Save, ArrowLeft } from 'lucide-react';
+import { PlusCircle, Trash2, Save, ArrowLeft, Download } from 'lucide-react';
 
 export default function HostCreate() {
   const [title, setTitle] = useState('My Awesome Quiz');
@@ -22,6 +22,23 @@ export default function HostCreate() {
       localStorage.setItem('quizhoot_hostId', hostId);
     }
     return hostId;
+  };
+
+  const exportQuiz = () => {
+    const quizData = {
+      title,
+      questions,
+      correctAnswers
+    };
+    const blob = new Blob([JSON.stringify(quizData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title || 'quiz'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const addQuestion = () => {
@@ -100,14 +117,23 @@ export default function HostCreate() {
               className="text-2xl font-black text-gray-800 outline-none hover:bg-gray-100 focus:bg-gray-100 px-3 py-1 rounded-lg w-full max-w-sm" 
             />
           </div>
-          <button
-            onClick={saveQuiz}
-            disabled={isSaving}
-            className="bg-[#26890c] hover:bg-green-700 disabled:opacity-50 text-white font-bold py-2 px-6 rounded-lg shadow-md border-b-4 border-green-900 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2"
-          >
-            <Save size={20} />
-            {isSaving ? 'Saving...' : 'Save & Exit'}
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={exportQuiz}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md border-b-4 border-blue-900 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2"
+            >
+              <Download size={20} />
+              Export JSON
+            </button>
+            <button
+              onClick={saveQuiz}
+              disabled={isSaving}
+              className="bg-[#26890c] hover:bg-green-700 disabled:opacity-50 text-white font-bold py-2 px-6 rounded-lg shadow-md border-b-4 border-green-900 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2"
+            >
+              <Save size={20} />
+              {isSaving ? 'Saving...' : 'Save & Exit'}
+            </button>
+          </div>
         </div>
       </header>
 

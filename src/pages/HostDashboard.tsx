@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
-import { Plus, Play, LogOut, ArrowLeft } from 'lucide-react';
+import { Plus, Play, LogOut, ArrowLeft, Upload } from 'lucide-react';
 import { Quiz } from '../types';
 
 export default function HostDashboard() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getOrCreateHostId = () => {
     let hostId = localStorage.getItem('quizhoot_hostId');
@@ -41,6 +42,47 @@ export default function HostDashboard() {
 
   const handleLogout = () => {
     navigate('/');
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const data = JSON.parse(text);
+        
+        if (!data.title || !data.questions) {
+          throw new Error('Invalid format');
+        }
+
+        const quizRef = doc(collection(db, 'quizzes'));
+        const quizId = quizRef.id;
+
+        const quizDataToSave = {
+          hostId,
+          title: data.title,
+          questions: data.questions,
+          createdAt: serverTimestamp(),
+        };
+
+        await setDoc(quizRef, quizDataToSave);
+        await setDoc(doc(db, 'quizzes', quizId, 'private', 'hostOnly'), { correctAnswers: data.correctAnswers || Array(data.questions.length).fill(0) });
+        
+        fetchQuizzes(hostId);
+      } catch (err) {
+        console.error('Failed to import quiz', err);
+        alert('Invalid quiz file format.');
+      }
+      
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
   };
 
   const playQuiz = async (quiz: Quiz) => {
@@ -101,6 +143,20 @@ export default function HostDashboard() {
             </div>
           </div>
           <div className="flex gap-4">
+            <input 
+              type="file" 
+              accept=".json" 
+              ref={fileInputRef} 
+              onChange={handleImport} 
+              className="hidden" 
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-md border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2"
+            >
+              <Upload size={20} />
+              Import
+            </button>
             <button
               onClick={() => navigate('/host/create')}
               className="bg-[#26890c] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl shadow-md border-b-4 border-black/20 active:border-b-0 active:translate-y-1 transition-all flex items-center gap-2"
